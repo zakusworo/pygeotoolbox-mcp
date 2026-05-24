@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pygeotoolbox-mcp"
+version = "0.1.0"
+description = "Geothermal engineering toolbox with MCP server for Hermes Agent"
+readme = "README.md"
+license = {text="MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name="Zulfikar Aji Kusworo", email="zakusworo@example.com"}
+]
+keywords = ["geothermal", "reservoir", "engineering", "mcp", "hermes", "iapws", "coolprop"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+]
+dependencies = [
+    "CoolProp>=6.4.3",
+    "iapws>=1.5.3",
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "matplotlib>=3.7",
+    "fastmcp>=0.2",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-cov>=4.0", "black>=23.0", "ruff>=0.1"]
+
+[project.scripts]
+pygeotoolbox-mcp = "pygeotoolbox.mcp_server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
