@@ -101,6 +101,16 @@ def entropy_sat_vapor(T_C: float, fluid: str = 'R134a', method: str = 'auto') ->
     h = enthalpy_sat_vapor(T_C, fluid, 'poly')
     return h / (T_C + 273.15)
 
+def critical_temperature_C(fluid: str = 'R134a') -> float:
+    """Critical temperature [°C] of the working fluid (CoolProp, else fit table)."""
+    if HAS_COOLPROP:
+        try:
+            return PropsSI('Tcrit', fluid) - 273.15
+        except Exception:
+            pass
+    return FLUID_FITS.get(fluid, {}).get('T_critical_C', float('nan'))
+
+
 def orc_cycle_efficiency(
     T_evap_C: float,
     T_cond_C: float,
@@ -110,62 +120,90 @@ def orc_cycle_efficiency(
     method: str = 'auto',
 ) -> dict:
     """
-    Compute ORC cycle efficiency using accurate working fluid properties.
-    
-    Returns Carnot efficiency, actual efficiency, and net work.
+    Compute subcritical ORC cycle efficiency using working-fluid properties.
+
+    States: 1 = condenser liquid out / pump in, 2 = pump out, 3 = evaporator
+    vapor out / turbine in, 4 = turbine out / condenser in.
+
+    Physical guards (added v0.5.2):
+    - Raises ValueError if T_evap_C >= critical temperature of the fluid; a
+      subcritical ORC cannot evaporate the fluid above its critical point.
+      (This previously caused CoolProp to fail silently and fall back to a
+      crude polynomial for h3 only, mixing reference scales and producing
+      eta_thermal > eta_carnot — a second-law violation.)
+    - Uses ONE consistent property source for every state. If CoolProp is
+      requested but cannot serve the requested states, all properties fall
+      back to the polynomial fits together (never mixed).
     """
-    # Enthalpies
-    h1 = enthalpy_sat_liquid(T_cond_C, fluid, method)  # condenser outlet
-    h2 = h1 + 10  # pump outlet (approximate pump work)
-    h3 = enthalpy_sat_vapor(T_evap_C, fluid, method)     # evaporator outlet
-    h4 = h3  # ideal turbine (isentropic)
-    
-    # Turbine work (isentropic efficiency)
-    # For real turbine: h4_actual = h3 - eta_turbine * (h3 - h4_isen)
-    # We need entropy to find h4_isen
-    s3 = entropy_sat_vapor(T_evap_C, fluid, method)
-    
-    # At condenser T, find h for same entropy
-    s4_target = s3
-    # Approximate: h4_isen ≈ enthalpy at T_cond with same entropy
-    # For rough calc, use linear interpolation
-    h4_liquid = enthalpy_sat_liquid(T_cond_C, fluid, method)
-    h4_vapor = enthalpy_sat_vapor(T_cond_C, fluid, method)
-    s4_liquid = entropy_sat_liquid(T_cond_C, fluid, method)
-    s4_vapor = entropy_sat_vapor(T_cond_C, fluid, method)
-    
-    if abs(s4_vapor - s4_liquid) > 0.001:
-        x4 = (s4_target - s4_liquid) / (s4_vapor - s4_liquid)
-        x4 = max(0.0, min(x4, 1.0))
-        h4_isen = h4_liquid + x4 * (h4_vapor - h4_liquid)
+    Tcrit = critical_temperature_C(fluid)
+    if T_cond_C >= T_evap_C:
+        raise ValueError(
+            f"T_cond_C ({T_cond_C}°C) must be below T_evap_C ({T_evap_C}°C)."
+        )
+    if Tcrit == Tcrit and T_evap_C >= Tcrit - 0.5:  # NaN-safe
+        raise ValueError(
+            f"T_evap_C={T_evap_C}°C is at/above the critical temperature of "
+            f"{fluid} (Tcrit={Tcrit:.1f}°C). A subcritical ORC cannot evaporate "
+            f"the working fluid above its critical point. Choose a lower "
+            f"evaporator temperature or a fluid with a higher critical "
+            f"temperature."
+        )
+
+    # --- Choose a single, consistent property source ---
+    src = 'auto' if (method == 'auto' and HAS_COOLPROP) else 'poly'
+    if src == 'auto':
+        try:
+            PropsSI('H', 'T', T_evap_C + 273.15, 'Q', 1.0, fluid)
+            PropsSI('H', 'T', T_cond_C + 273.15, 'Q', 0.0, fluid)
+        except Exception:
+            src = 'poly'  # degrade ALL states together, never mix
+
+    # State enthalpies / entropies (all from the same source)
+    h1 = enthalpy_sat_liquid(T_cond_C, fluid, src)   # pump inlet
+    h3 = enthalpy_sat_vapor(T_evap_C, fluid, src)    # turbine inlet
+    s3 = entropy_sat_vapor(T_evap_C, fluid, src)
+
+    # Isentropic turbine outlet at condenser pressure
+    if src == 'auto':
+        P_cond = PropsSI('P', 'T', T_cond_C + 273.15, 'Q', 0.0, fluid)
+        try:
+            h4_isen = PropsSI('H', 'P', P_cond, 'S', s3 * 1000.0, fluid) / 1000.0
+        except Exception:
+            h4_isen = h1
+        P_evap = PropsSI('P', 'T', T_evap_C + 273.15, 'Q', 1.0, fluid)
+        v_f = 1.0 / PropsSI('D', 'T', T_cond_C + 273.15, 'Q', 0.0, fluid)
+        w_pump = v_f * (P_evap - P_cond) / eta_pump / 1000.0  # J -> kJ/kg
     else:
-        h4_isen = h4_liquid
-    
-    # Actual turbine outlet
+        # Polynomial path: wet-steam quality from entropy balance at condenser
+        h4_liquid = enthalpy_sat_liquid(T_cond_C, fluid, src)
+        h4_vapor = enthalpy_sat_vapor(T_cond_C, fluid, src)
+        s4_liquid = entropy_sat_liquid(T_cond_C, fluid, src)
+        s4_vapor = entropy_sat_vapor(T_cond_C, fluid, src)
+        if abs(s4_vapor - s4_liquid) > 1e-6:
+            x4 = max(0.0, min((s3 - s4_liquid) / (s4_vapor - s4_liquid), 1.0))
+            h4_isen = h4_liquid + x4 * (h4_vapor - h4_liquid)
+        else:
+            h4_isen = h4_liquid
+        v_f = 0.0008  # m³/kg approximate
+        w_pump = v_f * 1000.0 / eta_pump  # crude fallback
+
+    # Actual turbine outlet, works, heat input
     h4_actual = h3 - eta_turbine * (h3 - h4_isen)
-    
-    # Pump work
-    v_f = 0.001  # m³/kg (approximate liquid specific volume)
-    delta_P_kPa = 1000  # kPa (evap - cond pressure diff)
-    w_pump = v_f * delta_P_kPa / eta_pump  # kJ/kg
-    
     h2_actual = h1 + w_pump
-    
-    # Net work
     w_turbine = h3 - h4_actual
     w_net = w_turbine - w_pump
-    
-    # Heat input
     q_in = h3 - h2_actual
-    
-    # Efficiency
-    eta_thermal = w_net / q_in * 100 if q_in > 0 else 0
-    
-    # Carnot
+
+    eta_thermal = w_net / q_in * 100 if q_in > 0 else 0.0
+
+    # Carnot upper bound (cycle reference)
     T_hot_K = T_evap_C + 273.15
     T_cold_K = T_cond_C + 273.15
     eta_carnot = (1 - T_cold_K / T_hot_K) * 100
-    
+
+    # Second-law self-check (should always hold after the guards above)
+    second_law_ok = eta_thermal <= eta_carnot + 1e-6
+
     return {
         'h1_kJ_kg': h1,
         'h2_kJ_kg': h2_actual,
@@ -178,6 +216,9 @@ def orc_cycle_efficiency(
         'eta_thermal_percent': eta_thermal,
         'eta_carnot_percent': eta_carnot,
         'eta_ratio_percent': eta_thermal / eta_carnot * 100 if eta_carnot > 0 else 0,
+        'second_law_ok': second_law_ok,
+        'property_source': src,
+        'T_critical_C': Tcrit,
         'fluid': fluid,
     }
 

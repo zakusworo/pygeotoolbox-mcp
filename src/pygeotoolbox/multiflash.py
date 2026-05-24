@@ -11,6 +11,81 @@ try:
 except ImportError:
     from thermo import enthalpy_from_TP
 
+try:
+    from iapws import IAPWS97 as _IAPWS97
+    _HAS_IAPWS = True
+except Exception:  # pragma: no cover
+    _HAS_IAPWS = False
+
+
+def saturation_properties(T_C: float) -> tuple:
+    """
+    Saturated liquid/vapor enthalpy and entropy at T_C.
+
+    Returns (h_f, h_g [kJ/kg], s_f, s_g [kJ/kg/K]) from IAPWS-IF97 when the
+    iapws package is available (the framework's stated dependency); otherwise
+    falls back to piecewise-linear fits with a crude entropy estimate.
+
+    NOTE (v0.5.2): flash and turbine routines previously used the linear fits
+    below for enthalpy and *hard-coded* turbine outlet enthalpies. Both are
+    now replaced by genuine IAPWS-IF97 properties so that the steam-table and
+    isentropic-expansion claims hold in code, not only in documentation.
+    """
+    if _HAS_IAPWS and 0.01 < T_C < 373.9:
+        try:
+            liq = _IAPWS97(T=T_C + 273.15, x=0.0)
+            vap = _IAPWS97(T=T_C + 273.15, x=1.0)
+            return liq.h, vap.h, liq.s, vap.s
+        except Exception:
+            pass
+    # Legacy fallback (piecewise-linear); entropy approximated as h/T
+    if T_C < 100:
+        h_liquid = 4.18 * T_C
+        h_steam = 2675 + 1.8 * (T_C - 100)
+    elif T_C < 200:
+        h_liquid = 420 + 4.18 * (T_C - 100)
+        h_steam = 2675 + 1.8 * (T_C - 100)
+    elif T_C < 300:
+        h_liquid = 840 + 4.20 * (T_C - 200)
+        h_steam = 2800 + 1.0 * (T_C - 200)
+    else:
+        h_liquid = 1260 + 4.25 * (T_C - 300)
+        h_steam = 2900 + 0.8 * (T_C - 300)
+    T_K = T_C + 273.15
+    return h_liquid, h_steam, h_liquid / T_K, h_steam / T_K
+
+
+def isentropic_turbine_work(
+    T_inlet_C: float,
+    T_condenser_C: float,
+    eta_turbine: float,
+    baumann: bool = True,
+) -> tuple:
+    """
+    Specific turbine work [kJ/kg] for dry saturated steam expanding
+    isentropically (s_in = s_out) to the condenser saturation pressure.
+
+    A Baumann wet-expansion correction (~1% efficiency loss per 1% mean
+    exhaust moisture) is applied so that the deep, very-wet expansions
+    typical of geothermal turbines are penalised realistically instead of
+    being clipped with a hard-coded outlet enthalpy.
+
+    Returns (w_specific_kJ_kg, x_exit) where x_exit is isentropic exhaust
+    steam quality.
+    """
+    hf_i, hg_i, sf_i, sg_i = saturation_properties(T_inlet_C)
+    hf_c, hg_c, sf_c, sg_c = saturation_properties(T_condenser_C)
+    s_in = sg_i  # dry saturated steam leaves the separator/flash
+    if (sg_c - sf_c) > 1e-6:
+        x_is = max(0.0, min((s_in - sf_c) / (sg_c - sf_c), 1.0))
+    else:
+        x_is = 1.0
+    h_is = hf_c + x_is * (hg_c - hf_c)
+    w_isentropic = hg_i - h_is
+    eff = eta_turbine * (1 - 0.5 * (1 - x_is)) if baumann else eta_turbine
+    return max(0.0, eff * w_isentropic), x_is
+
+
 def flash_stage(
     h_inlet_kJ_kg: float,
     T_flash_C: float,
@@ -19,26 +94,12 @@ def flash_stage(
 ) -> dict:
     """
     Single flash stage: separates liquid and vapor at given T/P.
-    
+
     Returns dict with steam fraction, steam flow, liquid flow, enthalpies.
     """
-    # Use known IAPWS saturation enthalpies (avoids CoolProp issues at saturation)
-    # At temperature T_flash_C:
-    h_liquid = 4.18 * T_flash_C  # kJ/kg (saturated liquid, approximate)
-    # More accurate: use IAPWS correlation
-    if T_flash_C < 100:
-        h_liquid = 4.18 * T_flash_C
-        h_steam = 2675 + 1.8 * (T_flash_C - 100)
-    elif T_flash_C < 200:
-        h_liquid = 420 + 4.18 * (T_flash_C - 100)
-        h_steam = 2675 + 1.8 * (T_flash_C - 100)
-    elif T_flash_C < 300:
-        h_liquid = 840 + 4.20 * (T_flash_C - 200)
-        h_steam = 2800 + 1.0 * (T_flash_C - 200)
-    else:
-        h_liquid = 1260 + 4.25 * (T_flash_C - 300)
-        h_steam = 2900 + 0.8 * (T_flash_C - 300)
-    
+    # IAPWS-IF97 saturation enthalpies at the flash temperature
+    h_liquid, h_steam, _, _ = saturation_properties(T_flash_C)
+
     # Steam fraction from energy balance
     # h_inlet = x * h_steam + (1-x) * h_liquid
     if abs(h_steam - h_liquid) < 0.1:
@@ -70,6 +131,7 @@ def double_flash_cycle(
     eta_turbine1: float = 0.82,
     eta_turbine2: float = 0.82,
     w_pump_kJ_kg: float = 0.64,
+    h_total_kJ_kg: float = None,
 ) -> dict:
     """
     Double-flash steam cycle (like Hellisheidi).
@@ -78,10 +140,9 @@ def double_flash_cycle(
     Stage 2: Brine from Stage 1 flashed at T2, P2 → steam to LP turbine
     """
     # Stage 1 enthalpy - use realistic value for geothermal fluid
-    # At 260°C, saturated liquid h ≈ 1134 kJ/kg, saturated vapor h ≈ 2800 kJ/kg
-    # For Wairakei (liquid-dominated), total enthalpy ≈ 1200 kJ/kg (mostly liquid)
-    # For high-T systems (Hellisheidi, T>=200°C), use 1300 kJ/kg
-    if T_separator_C >= 200:
+    if h_total_kJ_kg is not None:
+        h_total = h_total_kJ_kg
+    elif T_separator_C >= 200:
         h_total = 1300.0
     else:
         h_total = 1200.0
@@ -94,20 +155,14 @@ def double_flash_cycle(
     m_brine1 = flash1['m_liquid_kg_s']
     flash2 = flash_stage(h_brine1, T_flash2_C, P_flash2_kPa, m_brine1)
     
-    # Turbine 1 (HP): steam from flash1
-    # Isentropic expansion from T_separator to T_condenser
-    h_turb1_in = flash1['h_steam_kJ_kg']
-    # Approximate isentropic outlet
-    h_condenser = 167.5  # kJ/kg at 40°C
-    h_out_iso1 = 2141  # approximate
-    w_turb1 = (h_turb1_in - h_out_iso1) * eta_turbine1
+    # Turbine 1 (HP): isentropic expansion to condenser pressure + Baumann
+    w_turb1, x_exit1 = isentropic_turbine_work(
+        T_separator_C, T_condenser_C, eta_turbine1)
     power_turb1_MW = flash1['m_steam_kg_s'] * w_turb1 / 1000
-    
-    # Turbine 2 (LP): steam from flash2
-    h_turb2_in = flash2['h_steam_kJ_kg']
-    # LP turbine expands to lower pressure
-    h_out_iso2 = 2250  # less expansion than HP
-    w_turb2 = (h_turb2_in - h_out_iso2) * eta_turbine2
+
+    # Turbine 2 (LP): isentropic expansion to condenser pressure + Baumann
+    w_turb2, x_exit2 = isentropic_turbine_work(
+        T_flash2_C, T_condenser_C, eta_turbine2)
     power_turb2_MW = flash2['m_steam_kg_s'] * w_turb2 / 1000
     
     # Pump work
@@ -126,6 +181,8 @@ def double_flash_cycle(
         'gross_MW': gross_MW,
         'pump_MW': pump1_MW + pump2_MW,
         'net_MW': net_MW,
+        'x_exit_hp': x_exit1,
+        'x_exit_lp': x_exit2,
         'm_steam_total_kg_s': flash1['m_steam_kg_s'] + flash2['m_steam_kg_s'],
     }
 
@@ -137,6 +194,7 @@ def triple_flash_cycle(
     T_condenser_C: float = 40.0,
     eta_turbine: float = 0.82,
     w_pump_kJ_kg: float = 0.64,
+    h_total_kJ_kg: float | None = None,
 ) -> dict:
     """
     Triple-flash cycle (HP + MP + LP turbines).
@@ -147,23 +205,26 @@ def triple_flash_cycle(
     Stage 3: Low-pressure flash (brine from stage 2)
     """
     # Stage 1 enthalpy
-    h_total = 1300.0 if T1_C >= 200 else 1200.0  # kJ/kg
+    if h_total_kJ_kg is not None:
+        h_total = h_total_kJ_kg
+    elif T1_C >= 200:
+        h_total = 1300.0
+    else:
+        h_total = 1200.0
     
     # Three flashes
     flash1 = flash_stage(h_total, T1_C, P1_kPa, m_total_kg_s)
     flash2 = flash_stage(flash1['h_liquid_kJ_kg'], T2_C, P2_kPa, flash1['m_liquid_kg_s'])
     flash3 = flash_stage(flash2['h_liquid_kJ_kg'], T3_C, P3_kPa, flash2['m_liquid_kg_s'])
     
-    # Turbine work for each stage (HP > MP > LP pressure)
-    # Approximate isentropic outlets
-    h_out1 = 2141  # HP turbine
-    h_out2 = 2250  # MP turbine
-    h_out3 = 2350  # LP turbine
-    
-    w1 = (flash1['h_steam_kJ_kg'] - h_out1) * eta_turbine
-    w2 = (flash2['h_steam_kJ_kg'] - h_out2) * eta_turbine
-    w3 = (flash3['h_steam_kJ_kg'] - h_out3) * eta_turbine
-    
+    # Turbine work per stage: genuine isentropic expansion (s_in = s_out) from
+    # the stage's dry saturated steam to the shared condenser pressure, with a
+    # Baumann wet-expansion correction. (Replaces the former hard-coded outlet
+    # enthalpies h_out1/2/3, which did not honour entropy conservation.)
+    w1, x_exit1 = isentropic_turbine_work(T1_C, T_condenser_C, eta_turbine)
+    w2, x_exit2 = isentropic_turbine_work(T2_C, T_condenser_C, eta_turbine)
+    w3, x_exit3 = isentropic_turbine_work(T3_C, T_condenser_C, eta_turbine)
+
     power1 = flash1['m_steam_kg_s'] * w1 / 1000
     power2 = flash2['m_steam_kg_s'] * w2 / 1000
     power3 = flash3['m_steam_kg_s'] * w3 / 1000
@@ -186,6 +247,9 @@ def triple_flash_cycle(
         'gross_MW': gross,
         'pump_MW': pump1 + pump2 + pump3,
         'net_MW': net,
+        'x_exit1': x_exit1,
+        'x_exit2': x_exit2,
+        'x_exit3': x_exit3,
         'm_steam_total_kg_s': flash1['m_steam_kg_s'] + flash2['m_steam_kg_s'] + flash3['m_steam_kg_s'],
     }
 
