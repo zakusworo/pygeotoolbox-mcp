@@ -1,6 +1,6 @@
 """pygeotoolbox-mcp: Geothermal Engineering Toolbox for Hermes Agent."""
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 __author__ = "Zulfikar Aji Kusworo"
 
 from . import thermo
@@ -16,3 +16,8 @@ from . import heat_balance
 from . import sensitivity
 from . import scaling
 from . import siapws_saturation
+from . import multiphase
+from . import ncg
+from . import multiflash
+from . import parasitic
+from . import working_fluid

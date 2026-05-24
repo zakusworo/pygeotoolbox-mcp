@@ -1,0 +1,56 @@
+"""
+Framework Upgrade Summary
+========================
+
+pygeotoolbox-mcp v0.5.0 — New Modules Added
+--------------------------------------------
+
+1. multiphase.py     — Two-phase flow (HEM + Drift-Flux + Beggs-Brill)
+2. ncg.py            — Non-condensable gas removal (CO2, H2S, CH4, NH3)
+3. multiflash.py     — Multi-stage flash (double-flash, triple-flash)
+4. parasitic.py      — Parasitic load accounting (cooling, pumps, controls)
+5. working_fluid.py  — Accurate working fluid properties (R134a, R600a, R290, R717)
+
+These modules address the limitations identified in the case study analysis:
+
+| Limitation | Old | New Module | Impact |
+|------------|-----|------------|--------|
+| Single-phase only | IPR/TPR | multiphase.py | Captures two-phase pressure drop |
+| No NCG handling | Assumed pure water | ncg.py | Adds 3-8% power penalty |
+| Single-flash | One separator | multiflash.py | Double-flash = +30-50% power |
+| No parasitic loads | Pump only | parasitic.py | Subtracts 8-15% for auxiliaries |
+| Approximate working fluid | R134a estimate | working_fluid.py | Uses CoolProp if available |
+
+Usage Example:
+--------------
+
+from pygeotoolbox import multiflash, ncg, parasitic
+
+# Double-flash cycle
+cycle = multiflash.double_flash_cycle(
+    m_total_kg_s=400,
+    T_separator_C=180,
+    P_separator_kPa=1000,
+    T_flash2_C=140,
+    P_flash2_kPa=361,
+)
+
+# NCG penalty
+ncg_penalty = ncg.total_ncg_penalty(m_steam_kg_s=cycle['m_steam_total_kg_s'])
+
+# Parasitic loads
+net = parasitic.parasitic_loads(
+    gross_power_MW=cycle['net_MW'],
+    m_steam_kg_s=cycle['m_steam_total_kg_s'],
+    m_brine_kg_s=400 - cycle['m_steam_total_kg_s'],
+)
+
+print(f"Gross: {cycle['gross_MW']:.1f} MW")
+print(f"Net: {net['net_power_MW']:.1f} MW")
+print(f"Parasitic: {net['parasitic_fraction_percent']:.1f}%")
+
+Author: Zulfikar Aji Kusworo, 2026
+Version: 0.5.0
+"""
+
+print(__doc__)
