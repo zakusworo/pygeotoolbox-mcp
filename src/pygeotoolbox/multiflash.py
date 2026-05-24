@@ -80,7 +80,11 @@ def double_flash_cycle(
     # Stage 1 enthalpy - use realistic value for geothermal fluid
     # At 260°C, saturated liquid h ≈ 1134 kJ/kg, saturated vapor h ≈ 2800 kJ/kg
     # For Wairakei (liquid-dominated), total enthalpy ≈ 1200 kJ/kg (mostly liquid)
-    h_total = 1200.0  # kJ/kg (realistic for Wairakei liquid-dominated system)
+    # For high-T systems (Hellisheidi, T>=200°C), use 1300 kJ/kg
+    if T_separator_C >= 200:
+        h_total = 1300.0
+    else:
+        h_total = 1200.0
     
     # Flash 1
     flash1 = flash_stage(h_total, T_separator_C, P_separator_kPa, m_total_kg_s)
@@ -132,25 +136,45 @@ def triple_flash_cycle(
     T3_C: float, P3_kPa: float,
     T_condenser_C: float = 40.0,
     eta_turbine: float = 0.82,
+    w_pump_kJ_kg: float = 0.64,
 ) -> dict:
-    """Triple-flash cycle (rare, used in some Japanese plants)."""
-    # Similar to double-flash with third stage
-    h_total = 4.18 * T1_C  # approximate
+    """
+    Triple-flash cycle (HP + MP + LP turbines).
     
+    Used in some Japanese and high-enthalpy Icelandic plants.
+    Stage 1: High-pressure flash
+    Stage 2: Medium-pressure flash (brine from stage 1)
+    Stage 3: Low-pressure flash (brine from stage 2)
+    """
+    # Stage 1 enthalpy
+    h_total = 1300.0 if T1_C >= 200 else 1200.0  # kJ/kg
+    
+    # Three flashes
     flash1 = flash_stage(h_total, T1_C, P1_kPa, m_total_kg_s)
     flash2 = flash_stage(flash1['h_liquid_kJ_kg'], T2_C, P2_kPa, flash1['m_liquid_kg_s'])
     flash3 = flash_stage(flash2['h_liquid_kJ_kg'], T3_C, P3_kPa, flash2['m_liquid_kg_s'])
     
-    # Simplified turbine work for each stage
-    w1 = 500  # kJ/kg (approximate)
-    w2 = 350
-    w3 = 200
+    # Turbine work for each stage (HP > MP > LP pressure)
+    # Approximate isentropic outlets
+    h_out1 = 2141  # HP turbine
+    h_out2 = 2250  # MP turbine
+    h_out3 = 2350  # LP turbine
     
-    power1 = flash1['m_steam_kg_s'] * w1 * eta_turbine / 1000
-    power2 = flash2['m_steam_kg_s'] * w2 * eta_turbine / 1000
-    power3 = flash3['m_steam_kg_s'] * w3 * eta_turbine / 1000
+    w1 = (flash1['h_steam_kJ_kg'] - h_out1) * eta_turbine
+    w2 = (flash2['h_steam_kJ_kg'] - h_out2) * eta_turbine
+    w3 = (flash3['h_steam_kJ_kg'] - h_out3) * eta_turbine
+    
+    power1 = flash1['m_steam_kg_s'] * w1 / 1000
+    power2 = flash2['m_steam_kg_s'] * w2 / 1000
+    power3 = flash3['m_steam_kg_s'] * w3 / 1000
+    
+    # Pumps
+    pump1 = flash1['m_steam_kg_s'] * w_pump_kJ_kg / 1000
+    pump2 = flash2['m_steam_kg_s'] * w_pump_kJ_kg / 1000
+    pump3 = flash3['m_steam_kg_s'] * w_pump_kJ_kg / 1000
     
     gross = power1 + power2 + power3
+    net = gross - pump1 - pump2 - pump3
     
     return {
         'flash1': flash1,
@@ -160,7 +184,9 @@ def triple_flash_cycle(
         'power2_MW': power2,
         'power3_MW': power3,
         'gross_MW': gross,
-        'net_MW': gross * 0.95,  # 5% parasitic
+        'pump_MW': pump1 + pump2 + pump3,
+        'net_MW': net,
+        'm_steam_total_kg_s': flash1['m_steam_kg_s'] + flash2['m_steam_kg_s'] + flash3['m_steam_kg_s'],
     }
 
 
