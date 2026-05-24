@@ -112,6 +112,18 @@ centuries-scale thermal lifetime of Olkaria East (KE). Cycle efficiencies stay
 below the Carnot limit in every case. Case scripts, a consolidated runner and
 machine-readable results are available with the accompanying study.
 
+## Verification (use a different model)
+
+When this toolbox is driven by an AI agent, run the verification step with a
+different LLM or agent than the one that produced the code or chose the inputs.
+A model is weak at catching its own mistakes, since it shares the blind spots
+that produced them; an independent, cross-model review finds far more. In
+practice, workflows authored with Hermes driving Kimi-2.6 were verified with a
+separate agent (Claude Code, Opus 4.7), which surfaced errors the authoring model
+had missed. The framework's physical guards (subcritical-ORC critical-temperature
+check, single-source property rule, second-law `second_law_ok` flag) make these
+cross-model checks concrete and machine-readable.
+
 ## Changelog
 
 **v0.5.2 — physical-consistency repairs**
