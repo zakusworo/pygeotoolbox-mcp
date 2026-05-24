@@ -6,14 +6,15 @@ Inspired by [gabrielserrao/pyrestoolbox-mcp](https://github.com/gabrielserrao/py
 
 ## Features
 
-- **Thermodynamic properties** (enthalpy, density, viscosity, cp, conductivity, phase) via CoolProp
-- **Saturation curves** (T-P saturation, steam quality) via IAPWS-IF97
+- **Thermodynamic properties** (enthalpy, density, viscosity, cp, conductivity, phase) via CoolProp + IAPWS-IF97 direct equations
+- **IAPWS Saturation** (backward T(p), P(T), saturation properties) — valid triple point to critical point
+- **Transport properties** (thermal conductivity, dynamic viscosity, kinematic viscosity, Prandtl number) — IAPWS priority, CoolProp fallback
 - **Wellbore deliverability** (IPR/TPR, operating point, productivity index)
 - **Brine & scaling** (Ryznar CaCO3, SiO2 scaling risk, corrosivity)
 - **Decline curves** (exponential, hyperbolic, reinjection temperature model)
 - **Heat balance** (reservoir heat, thermal recovery, power output NPV)
 - **Sensitivity analysis** (one-factor sweep, tornado, Monte Carlo, rank correlation)
-- **MCP server** with 15+ tools exposed via FastMCP STDIO/HTTP transport
+- **MCP server** with 18 tools exposed via FastMCP STDIO/HTTP transport
 
 ## Install
 
@@ -59,12 +60,14 @@ fastmcp run src/pygeotoolbox/mcp_server.py --transport http --port 8000
 | Module | Description |
 |--------|-------------|
 | `thermo` | IAPWS-IF97 properties via CoolProp |
+| `siapws_saturation` | IAPWS saturation T(p), P(T), properties |
+| `transport` | Thermal conductivity, viscosity, Prandtl |
 | `wellbore` | IPR/TPR, operating point |
 | `scaling` | CaCO3, SiO2, corrosivity |
 | `decline` | Exponential, hyperbolic, reinjection temp |
 | `heat_balance` | Reservoir heat, power, NPV |
 | `sensitivity` | One-factor, tornado, Monte Carlo |
-| `mcp_server` | FastMCP tool registry |
+| `mcp_server` | FastMCP tool registry (18 tools)
 
 ## Link to Course
 

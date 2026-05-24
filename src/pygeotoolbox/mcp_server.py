@@ -11,11 +11,13 @@ except ImportError:
     raise RuntimeError("fastmcp not installed. Run: pip install fastmcp")
 
 from . import thermo
+from . import transport
 from . import wellbore
 from . import decline
 from . import heat_balance
 from . import sensitivity
 from . import scaling
+from . import siapws_saturation
 
 mcp = FastMCP("pygeotoolbox-mcp")
 
@@ -221,6 +223,76 @@ def run_monte_carlo(func_name: str, param_distributions: dict, n_samples: int = 
         if not valid:
             return {"status": "error", "message": "No valid results from Monte Carlo"}
         return {"status": "ok", "mean": round(np.mean(valid), 3), "p10": round(np.percentile(valid, 10), 3), "p50": round(np.percentile(valid, 50), 3), "p90": round(np.percentile(valid, 90), 3)}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# ---------------------------------------------------------------------------
+# Transport properties tools
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def get_thermal_conductivity(T_C: float, P_kPa: float) -> dict:
+    """Get thermal conductivity W/(m·K) at T (C) and P (kPa). Uses IAPWS priority."""
+    try:
+        k = transport.thermal_conductivity(T_C, P_kPa)
+        if k is None:
+            return {"status": "error", "message": "Outside IAPWS range or no backend available"}
+        return {"status": "ok", "k_W_mK": round(k, 6)}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@mcp.tool()
+def get_dynamic_viscosity(T_C: float, P_kPa: float) -> dict:
+    """Get dynamic viscosity Pa·s at T (C) and P (kPa). Uses IAPWS priority."""
+    try:
+        mu = transport.dynamic_viscosity(T_C, P_kPa)
+        if mu is None:
+            return {"status": "error", "message": "Outside IAPWS range or no backend available"}
+        return {"status": "ok", "mu_Pas": round(mu, 9)}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@mcp.tool()
+def get_transport_package(T_C: float, P_kPa: float) -> dict:
+    """Get complete transport properties: k, mu, nu, Pr."""
+    try:
+        props = transport.transport_properties(T_C, P_kPa)
+        return {"status": "ok", **props}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# ---------------------------------------------------------------------------
+# IAPWS saturation tools
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def iapws_saturation_temperature(P_kPa: float) -> dict:
+    """Get IAPWS saturation temperature (C) from pressure (kPa)."""
+    try:
+        T = siapws_saturation.saturation_temperature(P_kPa)
+        if T is None:
+            return {"status": "error", "message": "Pressure outside IAPWS range (0.611657 - 22064 kPa)"}
+        return {"status": "ok", "T_sat_C": round(T, 6)}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@mcp.tool()
+def iapws_saturation_pressure(T_C: float) -> dict:
+    """Get IAPWS saturation pressure (kPa) from temperature (C)."""
+    try:
+        P = siapws_saturation.saturation_pressure(T_C)
+        if P is None:
+            return {"status": "error", "message": "Temperature outside IAPWS range (0.01 - 373.946 C)"}
+        return {"status": "ok", "P_sat_kPa": round(P, 6)}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@mcp.tool()
+def iapws_saturation_properties(P_kPa: float) -> dict:
+    """Get saturation properties including T, P, phase, status."""
+    try:
+        result = siapws_saturation.saturation_properties(P_kPa)
+        return {"status": "ok", **result}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
