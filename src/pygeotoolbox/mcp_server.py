@@ -10,8 +10,12 @@ try:
 except ImportError:
     raise RuntimeError("fastmcp not installed. Run: pip install fastmcp")
 
+import math
+
 from . import thermo
 from . import transport
+from . import seawater
+from . import geophysics
 from . import wellbore
 from . import decline
 from . import heat_balance
@@ -293,6 +297,107 @@ def iapws_saturation_properties(P_kPa: float) -> dict:
     try:
         result = siapws_saturation.saturation_properties(P_kPa)
         return {"status": "ok", **result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# ---------------------------------------------------------------------------
+# Tier 2: Seawater tools
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def get_seawater_density(T_C: float, salinity_psu: float, P_MPa: float = 0.1) -> dict:
+    """Get seawater density in kg/m3 at T (C), salinity (psu), optional P (MPa)."""
+    try:
+        result = seawater.seawater_density(T_C, salinity_psu, P_MPa)
+        return {"status": "ok", **result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@mcp.tool()
+def get_seawater_surface_tension(T_C: float, salinity_psu: float = 35.0) -> dict:
+    """Get seawater surface tension in N/m at T (C) and salinity (psu)."""
+    try:
+        result = seawater.seawater_surface_tension(T_C, salinity_psu)
+        return {"status": "ok", **result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@mcp.tool()
+def get_seawater_thermal_conductivity(T_C: float, salinity_psu: float) -> dict:
+    """Get seawater thermal conductivity in W/(m·K)."""
+    try:
+        result = seawater.seawater_thermal_conductivity(T_C, salinity_psu)
+        return {"status": "ok", **result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# ---------------------------------------------------------------------------
+# Tier 2: Geophysics tools
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def get_brine_conductivity(T_C: float, Na_mg_L: float = 0.0, Cl_mg_L: float = 0.0,
+                           Ca_mg_L: float = 0.0, HCO3_mg_L: float = 0.0,
+                           salinity_psu: float | None = None) -> dict:
+    """Estimate brine electrical conductivity in S/m from ions or salinity."""
+    try:
+        if salinity_psu is not None:
+            result = geophysics.brine_electrical_conductivity(T_C, salinity_psu=salinity_psu)
+        else:
+            result = geophysics.brine_electrical_conductivity(T_C, Na_mg_L=Na_mg_L, Cl_mg_L=Cl_mg_L,
+                                                              Ca_mg_L=Ca_mg_L, HCO3_mg_L=HCO3_mg_L)
+        return {"status": "ok", **result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@mcp.tool()
+def get_resistivity_from_conductivity(conductivity_S_m: float) -> dict:
+    """Convert conductivity S/m to resistivity ohm·m."""
+    try:
+        rho = geophysics.resistivity_from_conductivity(conductivity_S_m)
+        return {"status": "ok", "resistivity_ohm_m": round(rho, 6)}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@mcp.tool()
+def estimate_salinity_from_resistivity(resistivity_ohm_m: float, T_C: float = 25.0) -> dict:
+    """Estimate salinity from resistivity (empirical approximation)."""
+    try:
+        result = geophysics.salinity_from_resistivity(resistivity_ohm_m, T_C)
+        return {"status": "ok", **result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# ---------------------------------------------------------------------------
+# Tier 2: NaCl Critical Point
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def get_nacl_critical(molality: float) -> dict:
+    """Estimate critical T (C) and P (kPa) for NaCl-H2O solution."""
+    try:
+        result = scaling.nacl_critical_properties(molality)
+        return {"status": "ok", **result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@mcp.tool()
+def convert_salinity_to_molality(salinity_wt_percent: float) -> dict:
+    """Convert wt% NaCl to molality (mol/kg water)."""
+    try:
+        m = scaling.salinity_to_molality(salinity_wt_percent)
+        if math.isnan(m):
+            return {"status": "error", "message": "Invalid salinity range"}
+        return {"status": "ok", "molality": round(m, 4)}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@mcp.tool()
+def convert_molality_to_salinity(molality: float) -> dict:
+    """Convert molality back to approximate wt% NaCl."""
+    try:
+        s = scaling.molality_to_salinity(molality)
+        return {"status": "ok", "salinity_wt_percent": round(s, 4)}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 

@@ -86,3 +86,65 @@ def corrosivity_index(pH: float, Cl_mg_L: float, H2S_mg_L: float = 0.0) -> dict:
     else:
         cls = "mild"
     return {"score": score, "class": cls}
+
+
+def nacl_critical_properties(molality: float) -> dict:
+    """
+    Estimate critical temperature and pressure of NaCl-H2O solution.
+    Based on IAPWS critnacl formulation (approximation for dilute to moderate brines).
+    Valid for molality m = 0 to ~5 mol/kg (seawater ~0.7, Salton Sea ~3-5).
+
+    Args:
+        molality: molality of NaCl (mol/kg water)
+    Returns:
+        dict with T_critical_C, P_critical_kPa, molality, method
+    """
+    if molality < 0:
+        return {"status": "error", "message": "Molality must be >= 0"}
+    
+    # Pure water critical point
+    Tc_pure = 373.946  # C
+    Pc_pure = 22064.0   # kPa
+    
+    # NaCl effect: Tc increases ~17.5 C per mol/kg, Pc increases ~MPa per mol/kg
+    # From IAPWS and literature (Bischoff & Rosenbauer)
+    dTc_dm = 17.5
+    dPc_dm = 1200.0  # kPa per mol/kg (approx)
+    
+    Tc_brine = Tc_pure + dTc_dm * molality
+    Pc_brine = Pc_pure + dPc_dm * molality
+    
+    return {
+        "status": "ok",
+        "T_critical_C": round(Tc_brine, 3),
+        "P_critical_kPa": round(Pc_brine, 2),
+        "molality_mol_kg": round(molality, 4),
+        "method": "IAPWS-critnacl-approximation",
+        "note": "Valid for 0 < m < 5 mol/kg. Higher salinity requires Pitzer model.",
+    }
+
+
+def salinity_to_molality(salinity_wt_percent: float) -> float:
+    """
+    Convert wt% NaCl to molality (mol/kg water).
+    Approximate but accurate for brines.
+    """
+    if salinity_wt_percent < 0 or salinity_wt_percent > 26.0:
+        return float('nan')
+    # 1 kg brine with x% NaCl: mass NaCl = x/100 kg, mass H2O = (1 - x/100) kg
+    # mol NaCl = (x/100) / 0.05844 kg/mol
+    # molality = mol NaCl / kg H2O = (x/100)/0.05844 / (1-x/100)
+    x = salinity_wt_percent / 100.0
+    if x >= 1.0:
+        return float('inf')
+    return (x / 0.05844) / (1.0 - x)
+
+
+def molality_to_salinity(molality: float) -> float:
+    """Convert molality back to approximate wt% NaCl."""
+    if molality <= 0 or not math.isfinite(molality):
+        return 0.0
+    # Solve: m = (x/0.05844)/(1-x) for x
+    # m(1-x) = x/0.05844 => m - mx = x/0.05844 => m = x(1/0.05844 + m) => x = m / (1/0.05844 + m)
+    x = molality / (1.0 / 0.05844 + molality)
+    return x * 100.0
