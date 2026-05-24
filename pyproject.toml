@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pygeotoolbox-mcp"
-version = "0.3.0"
+version = "0.3.1"
 description = "Geothermal engineering toolbox with MCP server for Hermes Agent"
 readme = "README.md"
 license = {text="MIT"}

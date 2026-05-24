@@ -16,6 +16,7 @@ from . import thermo
 from . import transport
 from . import seawater
 from . import geophysics
+from . import thermo_supercooled
 from . import wellbore
 from . import decline
 from . import heat_balance
@@ -398,6 +399,37 @@ def convert_molality_to_salinity(molality: float) -> dict:
     try:
         s = scaling.molality_to_salinity(molality)
         return {"status": "ok", "salinity_wt_percent": round(s, 4)}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# ---------------------------------------------------------------------------
+# Tier 2+ : Supercooled Water (G12-15)
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def get_supercooled_water_properties(T_C: float, P_MPa: float = 0.1) -> dict:
+    """Get density, enthalpy, cp, thermal expansion for supercooled water (-22 to 0 C)."""
+    try:
+        props = thermo_supercooled.transport_properties_supercooled(T_C, P_MPa)
+        return {"status": "ok", **props}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@mcp.tool()
+def get_supercooled_density(T_C: float, P_MPa: float = 0.1) -> dict:
+    """Density of supercooled liquid water [kg/m3]. Valid -22 C to 0 C, 0.1 to 50 MPa."""
+    try:
+        rho = thermo_supercooled.density(T_C, P_MPa)
+        return {"status": "ok", "rho_kg_m3": round(rho, 3)}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@mcp.tool()
+def get_supercooled_enthalpy(T_C: float, P_MPa: float = 0.1) -> dict:
+    """Specific enthalpy of supercooled liquid water [J/kg]. Reference h(0 C) = 0."""
+    try:
+        h = thermo_supercooled.enthalpy(T_C, P_MPa)
+        return {"status": "ok", "h_J_kg": round(h, 1), "h_kJ_kg": round(h / 1000, 3)}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
