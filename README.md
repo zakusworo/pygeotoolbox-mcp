@@ -6,15 +6,17 @@ Inspired by [gabrielserrao/pyrestoolbox-mcp](https://github.com/gabrielserrao/py
 
 ## Features
 
-- **Thermodynamic properties** (enthalpy, density, viscosity, cp, conductivity, phase) via CoolProp + IAPWS-IF97 direct equations
-- **IAPWS Saturation** (backward T(p), P(T), saturation properties) — valid triple point to critical point
-- **Transport properties** (thermal conductivity, dynamic viscosity, kinematic viscosity, Prandtl number) — IAPWS priority, CoolProp fallback
+- **Thermodynamic properties** (enthalpy, density, viscosity, cp, conductivity, phase) via CoolProp + IAPWS-IF97
+- **IAPWS Saturation** (backward T(p), P(T), saturation properties) — triple point to critical point
+- **Transport properties** (thermal conductivity, dynamic viscosity, kinematic viscosity, Prandtl)
+- **Seawater properties** (density, surface tension, thermal conductivity)
+- **Geophysics** (brine electrical conductivity, resistivity → salinity)
 - **Wellbore deliverability** (IPR/TPR, operating point, productivity index)
-- **Brine & scaling** (Ryznar CaCO3, SiO2 scaling risk, corrosivity)
+- **Brine & scaling** (Ryznar CaCO3, SiO2 scaling risk, corrosivity, NaCl critical)
 - **Decline curves** (exponential, hyperbolic, reinjection temperature model)
 - **Heat balance** (reservoir heat, thermal recovery, power output NPV)
 - **Sensitivity analysis** (one-factor sweep, tornado, Monte Carlo, rank correlation)
-- **MCP server** with 18 tools exposed via FastMCP STDIO/HTTP transport
+- **MCP server** with 24 tools exposed via FastMCP STDIO/HTTP transport
 
 ## Install
 
@@ -62,12 +64,14 @@ fastmcp run src/pygeotoolbox/mcp_server.py --transport http --port 8000
 | `thermo` | IAPWS-IF97 properties via CoolProp |
 | `siapws_saturation` | IAPWS saturation T(p), P(T), properties |
 | `transport` | Thermal conductivity, viscosity, Prandtl |
+| `seawater` | Seawater density, surface tension, thermal conductivity |
+| `geophysics` | Brine conductivity, resistivity ↔ salinity |
 | `wellbore` | IPR/TPR, operating point |
-| `scaling` | CaCO3, SiO2, corrosivity |
+| `scaling` | CaCO3, SiO2, corrosivity, NaCl critical |
 | `decline` | Exponential, hyperbolic, reinjection temp |
 | `heat_balance` | Reservoir heat, power, NPV |
 | `sensitivity` | One-factor, tornado, Monte Carlo |
-| `mcp_server` | FastMCP tool registry (18 tools)
+| `mcp_server` | FastMCP tool registry (24 tools)
 
 ## Link to Course
 
@@ -75,7 +79,7 @@ This toolbox powers the exercises in the companion course repo:
 
 **[zakusworo/hermes-geothermal-engineering](https://github.com/zakusworo/hermes-geothermal-engineering)**
 
-Hermes Agent course with 9 exercise modules using this library.
+Hermes Agent course with 14 exercise modules using this library.
 
 ## License
 
