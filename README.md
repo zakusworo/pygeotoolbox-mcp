@@ -2,7 +2,7 @@
 
 Geothermal engineering toolbox with MCP server for Hermes Agent.
 
-Inspired by [gabrielserrao/pyrestoolbox-mcp](https://github.com/gabrielserrao/pyrestoolbox-mcp), reimplemented from scratch for geothermal engineering using CoolProp + IAPWS-IF97.
+Inspired by [gabrielserrao/pyrestoolbox-mcp](https://github.com/gabrielserrao/pyrestoolbox-mcp), reimplemented from scratch for geothermal engineering using CoolProp + 11 IAPWS formulations (IF97, Supp-sat, ThCond, Viscosity, G11-15, G12-15, G13-15, G14-19, Electrical Conductivity, NaCl Critical, Advisory Notes).
 
 ## Features
 
