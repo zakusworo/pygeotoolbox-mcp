@@ -11,13 +11,15 @@ Inspired by [gabrielserrao/pyrestoolbox-mcp](https://github.com/gabrielserrao/py
 - **Transport properties** (thermal conductivity, dynamic viscosity, kinematic viscosity, Prandtl)
 - **Seawater properties** (density, surface tension, thermal conductivity)
 - **Geophysics** (brine electrical conductivity, resistivity → salinity)
-- **Supercooled water** (IAPWS G12-15: density, enthalpy, cp, thermal expansion for −22 to 0 °C)
+- **Supercooled water** (IAPWS G12-15: −22 to 0 °C)
+- **Humid air** (IAPWS G11-15: cooling tower, gas extraction)
+- **SBTL fast lookup** (IAPWS G13-15: real-time / Monte Carlo)
 - **Wellbore deliverability** (IPR/TPR, operating point, productivity index)
 - **Brine & scaling** (Ryznar CaCO3, SiO2 scaling risk, corrosivity, NaCl critical)
 - **Decline curves** (exponential, hyperbolic, reinjection temperature model)
 - **Heat balance** (reservoir heat, power, NPV)
 - **Sensitivity analysis** (one-factor sweep, tornado, Monte Carlo, rank correlation)
-- **MCP server** with 27 tools exposed via FastMCP STDIO/HTTP transport
+- **MCP server** with 29 tools exposed via FastMCP STDIO/HTTP transport
 
 ## Install
 
@@ -68,12 +70,15 @@ fastmcp run src/pygeotoolbox/mcp_server.py --transport http --port 8000
 | `seawater` | Seawater density, surface tension, thermal conductivity |
 | `geophysics` | Brine conductivity, resistivity ↔ salinity |
 | `thermo_supercooled` | IAPWS G12-15: supercooled water −22 to 0 °C |
+| `humid_air` | IAPWS G11-15: humid air / cooling tower properties |
+| `sbtl` | IAPWS G13-15: fast lookup for Monte Carlo / real-time |
+| `advisory_notes` | IAPWS Advisory Notes 1–6: documented pitfalls |
 | `wellbore` | IPR/TPR, operating point |
 | `scaling` | CaCO3, SiO2, corrosivity, NaCl critical |
 | `decline` | Exponential, hyperbolic, reinjection temp |
 | `heat_balance` | Reservoir heat, power, NPV |
 | `sensitivity` | One-factor, tornado, Monte Carlo |
-| `mcp_server` | FastMCP tool registry (27 tools)
+| `mcp_server` | FastMCP tool registry (29 tools)
 
 ## IAPWS Standards Implemented
 
@@ -83,10 +88,13 @@ fastmcp run src/pygeotoolbox/mcp_server.py --transport http --port 8000
 | Supplementary Saturation | `siapws_saturation` | T(P), P(T), flash calculations |
 | Thermal Conductivity | `transport` | k(T, P) for heat exchanger sizing |
 | Viscosity | `transport` | μ(T, P) for pressure drop |
+| G11-15 Humid Air | `humid_air` | Cooling towers, gas extraction |
 | G12-15 Supercooled | `thermo_supercooled` | Cold reinjection, EGS, −22 to 0 C |
+| G13-15 SBTL | `sbtl` | Fast Monte Carlo / real-time lookup |
 | G14-19 Seawater | `seawater` | Coastal/offshore, OTEC |
 | Electrical Conductivity | `geophysics` | Resistivity log → salinity |
 | NaCl Critical Point | `scaling` | High-salinity brine systems |
+| Advisory Notes 1–6 | `advisory_notes` | Documented edge cases and best practices |
 
 ## Link to Course
 

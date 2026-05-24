@@ -17,6 +17,8 @@ from . import transport
 from . import seawater
 from . import geophysics
 from . import thermo_supercooled
+from . import humid_air
+from . import sbtl
 from . import wellbore
 from . import decline
 from . import heat_balance
@@ -430,6 +432,29 @@ def get_supercooled_enthalpy(T_C: float, P_MPa: float = 0.1) -> dict:
     try:
         h = thermo_supercooled.enthalpy(T_C, P_MPa)
         return {"status": "ok", "h_J_kg": round(h, 1), "h_kJ_kg": round(h / 1000, 3)}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# Tier Niche: Humid Air (G11-15) and SBTL (G13-15)
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+def get_humid_air_properties(T_C: float, P_kPa: float, RH: float) -> dict:
+    """Humid air properties: humidity ratio, density, enthalpy, dew point."""
+    try:
+        props = humid_air.humid_air_properties(T_C, P_kPa, RH)
+        return {"status": "ok", **props}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@mcp.tool()
+def sbtl_fast_lookup(T_C: float, P_MPa: float) -> dict:
+    """Fast SBTL lookup for rho, h, phase. Use for Monte Carlo or real-time."""
+    try:
+        props = sbtl.lookup_package(T_C, P_MPa)
+        return {"status": "ok", **props}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
