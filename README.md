@@ -75,6 +75,19 @@ fastmcp run src/pygeotoolbox/mcp_server.py --transport http --port 8000
 | `sensitivity` | One-factor, tornado, Monte Carlo |
 | `mcp_server` | FastMCP tool registry (27 tools)
 
+## IAPWS Standards Implemented
+
+| IAPWS Release | Module | Geothermal Use |
+|---------------|--------|----------------|
+| IAPWS-IF97 (base) | `thermo`, `transport` | All thermo + transport properties |
+| Supplementary Saturation | `siapws_saturation` | T(P), P(T), flash calculations |
+| Thermal Conductivity | `transport` | k(T, P) for heat exchanger sizing |
+| Viscosity | `transport` | μ(T, P) for pressure drop |
+| G12-15 Supercooled | `thermo_supercooled` | Cold reinjection, EGS, −22 to 0 C |
+| G14-19 Seawater | `seawater` | Coastal/offshore, OTEC |
+| Electrical Conductivity | `geophysics` | Resistivity log → salinity |
+| NaCl Critical Point | `scaling` | High-salinity brine systems |
+
 ## Link to Course
 
 This toolbox powers the exercises in the companion course repo:
