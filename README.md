@@ -15,6 +15,7 @@ Inspired by [gabrielserrao/pyrestoolbox-mcp](https://github.com/gabrielserrao/py
 - **Humid air** (IAPWS G11-15: cooling tower, gas extraction)
 - **SBTL fast lookup** (IAPWS G13-15: real-time / Monte Carlo)
 - **Wellbore deliverability** (IPR/TPR, operating point, productivity index)
+- **Power-cycle analysis** (multi-stage flash with IAPWS-IF97 energy balance and isentropic turbine expansion + Baumann wet-correction; binary ORC with a subcritical critical-temperature guard; NCG penalty; parasitic loads)
 - **Brine & scaling** (Ryznar CaCO3, SiO2 scaling risk, corrosivity, NaCl critical)
 - **Decline curves** (exponential, hyperbolic, reinjection temperature model)
 - **Heat balance** (reservoir heat, power, NPV)
@@ -74,6 +75,10 @@ fastmcp run src/pygeotoolbox/mcp_server.py --transport http --port 8000
 | `sbtl` | IAPWS G13-15: fast lookup for Monte Carlo / real-time |
 | `advisory_notes` | IAPWS Advisory Notes 1–6: documented pitfalls |
 | `wellbore` | IPR/TPR, operating point |
+| `multiflash` | Single/double/triple-flash cycle (IAPWS-IF97 + isentropic turbine + Baumann) |
+| `working_fluid` | Binary ORC cycle (R134a, isobutane, propane, ammonia) with subcritical guard |
+| `ncg` | Non-condensable-gas penalty and compressor power |
+| `parasitic` | Cooling / reinjection / gas-handling parasitic loads by plant type |
 | `scaling` | CaCO3, SiO2, corrosivity, NaCl critical |
 | `decline` | Exponential, hyperbolic, reinjection temp |
 | `heat_balance` | Reservoir heat, power, NPV |
@@ -95,6 +100,32 @@ fastmcp run src/pygeotoolbox/mcp_server.py --transport http --port 8000
 | Electrical Conductivity | `geophysics` | Resistivity log → salinity |
 | NaCl Critical Point | `scaling` | High-salinity brine systems |
 | Advisory Notes 1–6 | `advisory_notes` | Documented edge cases and best practices |
+
+## Validation
+
+The power-cycle modules were validated against five published geothermal field
+cases spanning flash, binary-ORC, EGS and sustainability technologies. Using
+boundary conditions from the literature, the framework reproduces published net
+output with match ratios of 101.0% (Wairakei, NZ), 95.5% (Soultz, FR), 102.5%
+(Chena Hot Springs, US) and 99.3% (Hellisheidi, IS), and reproduces the
+centuries-scale thermal lifetime of Olkaria East (KE). Cycle efficiencies stay
+below the Carnot limit in every case. Case scripts, a consolidated runner and
+machine-readable results are available with the accompanying study.
+
+## Changelog
+
+**v0.5.2 — physical-consistency repairs**
+
+- `multiflash`: flash enthalpies now come from **IAPWS-IF97** (replacing
+  piecewise-linear fits), and turbine work uses **genuine isentropic expansion
+  (s_in = s_out) with a Baumann wet-expansion correction** (replacing hard-coded
+  outlet enthalpies). Per-stage exhaust quality is reported.
+- `working_fluid.orc_cycle_efficiency`: added a **critical-temperature guard**
+  (rejects `T_evap ≥ T_crit` instead of silently mixing property sources and
+  producing efficiencies above the Carnot limit), a single consistent property
+  source, a proper isentropic turbine outlet, and a `second_law_ok` self-check.
+- Added `tests/test_orc_physics.py` (efficiency ≤ Carnot, supercritical inputs
+  raise, IAPWS saturation accuracy). All 89 tests pass.
 
 ## Link to Course
 
